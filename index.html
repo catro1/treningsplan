@@ -6,8 +6,9 @@
 <title>Ukeplan</title>
 <style>
   :root{
-    --bg:#E8F1EE; --paper:#F7FBFA; --ink:#1F3B36; --muted:#5E7A73; --line:#CFDDD8;
-    --jobb:#3D6FA8; --skole:#B8901A; --trening:#2E8A63; --annet:#8A6FA8;
+    --bg:#F2E7D5; --paper:#FAF7F0; --ink:#3B2A20; --muted:#7B5E4A; --line:#E3D3BC;
+    --choc:#3B2A20; --walnut:#7B5E4A; --caramel:#A67C52; --beige:#D1B89A;
+    --jobb:#3B2A20; --skole:#7B5E4A; --trening:#A67C52; --annet:#D1B89A;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;line-height:1.45;padding:20px 16px 48px}
@@ -19,19 +20,26 @@
   .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .nav{width:40px;height:40px;border-radius:12px;border:1.5px solid var(--line);background:transparent;font-size:1.2rem}
   .title{text-align:center}
-  h1{font-size:1.6rem;letter-spacing:-.01em}
+  h1{font-size:1.75rem;letter-spacing:-.01em;color:var(--ink)}
   .range{color:var(--muted);font-size:.92rem}
   .today-btn{display:block;margin:6px auto 0;border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
 
   .summary{display:flex;gap:6px;margin:18px 0 6px;flex-wrap:wrap}
   .pill{flex:1;min-width:110px;background:var(--paper);border-radius:12px;padding:10px 12px}
+  .pill{color:var(--paper)}
+  .pill:nth-child(1){background:var(--caramel)}
+  .pill:nth-child(2){background:var(--walnut)}
+  .pill:nth-child(3){background:var(--choc)}
+  .pill span{color:var(--paper)!important;opacity:.8}
+  .cats button[data-cat="annet"][aria-pressed="true"]{color:var(--ink)}
+  h1,.day-head h2{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600}
   .pill b{display:block;font-size:1.4rem;line-height:1.1}
   .pill span{font-size:.85rem;color:var(--muted)}
   .tools{display:flex;justify-content:flex-end;margin-bottom:12px}
   .tools button{border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
 
   .day{background:var(--paper);border-radius:18px;padding:16px;margin-bottom:12px;border:2px solid transparent}
-  .day.is-today{border-color:var(--ink)}
+  .day.is-today{border-color:var(--caramel)}
   .day-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
   .day-head h2{font-size:1.15rem}
   .day-head small{color:var(--muted)}
