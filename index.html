@@ -114,8 +114,8 @@ const CATS = {
   trening:{label:'Trening',color:'var(--trening)'},
   annet:{label:'Annet',color:'var(--annet)'}
 };
-const DAYS = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
-const SHORT = ['Man','Tir','Ons','Tor','Fre'];
+const DAYS = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag','Søndag'];
+const SHORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
 const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
 let monday = startOfWeek(new Date());
@@ -139,7 +139,8 @@ function isoWeek(d){
   return Math.ceil(((t - y0) / 864e5 + 1) / 7);
 }
 function key(d){ return 'ukeplan:' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
-function emptyPlan(){ return {days:[[],[],[],[],[]]}; }
+function emptyPlan(){ return {days:[[],[],[],[],[],[],[]]}; }
+function normalize(p){ while(p.days.length<7) p.days.push([]); return p; }
 function fmt(d){ return d.getDate() + '. ' + MONTHS[d.getMonth()]; }
 
 // Lagring: Claude-appen, ellers nettleserens lokale lagring, ellers bare i minnet
@@ -151,11 +152,11 @@ async function load(d){
   try{
     if(window.storage){
       const r = await window.storage.get(k, false);
-      if(r && r.value) return JSON.parse(r.value);
+      if(r && r.value) return normalize(JSON.parse(r.value));
     } else if(local){
       const v = local.getItem(k);
-      if(v) return JSON.parse(v);
-    } else if(memory[k]) return JSON.parse(memory[k]);
+      if(v) return normalize(JSON.parse(v));
+    } else if(memory[k]) return normalize(JSON.parse(memory[k]));
   }catch(e){}
   return emptyPlan();
 }
@@ -177,7 +178,7 @@ function sortItems(arr){
 }
 
 function render(){
-  const fri = addDays(monday,4);
+  const fri = addDays(monday,6);
   document.getElementById('week').textContent = 'Uke ' + isoWeek(monday);
   document.getElementById('range').textContent = fmt(monday) + ' – ' + fmt(fri);
   const thisMon = startOfWeek(new Date());
@@ -319,8 +320,6 @@ document.getElementById('theme').onclick = async ()=>{
 applyTheme(document.documentElement.dataset.theme || 'light');
 loadTheme();
 
-// Søndag: vis neste uke, siden det er da du planlegger
-if(new Date().getDay()===0) monday = addDays(monday,7);
 go(monday);
 </script>
 </body>
