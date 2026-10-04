@@ -54,6 +54,13 @@
   .check{border:1.5px solid var(--line);font-size:.9rem}
   .check.on{background:var(--trening);border-color:var(--trening);color:#fff}
   .del{color:var(--muted);font-size:1.1rem}
+  .dup{border:none;background:none;width:32px;height:32px;border-radius:8px;flex:none;color:var(--muted);font-size:1rem}
+  li.copyrow{flex-wrap:wrap;gap:6px;border-top:none;padding:0 0 10px 20px}
+  .copyrow small{width:100%;color:var(--muted);font-size:.82rem}
+  .dchip{border:1.5px solid var(--line);background:transparent;border-radius:9px;padding:6px 10px;font-size:.85rem}
+  .dchip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .docopy{border:none;background:var(--ink);color:var(--paper);border-radius:9px;padding:6px 12px;font-size:.85rem}
+  .cancelcopy{border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
   .empty{color:var(--muted);font-size:.9rem;padding:4px 0}
 
   .add{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -95,11 +102,13 @@ const CATS = {
   annet:{label:'Annet',color:'var(--annet)'}
 };
 const DAYS = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
+const SHORT = ['Man','Tir','Ons','Tor','Fre'];
 const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
 let monday = startOfWeek(new Date());
 let plan = emptyPlan();
 let chosen = {}; // valgt kategori per dag
+let copying = null; // {d, j, targets}
 let memory = {}; // fallback hvis lagring ikke finnes
 
 function startOfWeek(d){
@@ -190,8 +199,9 @@ function render(){
             ${it.time ? `<div class="t">${esc(it.time)}</div>` : ''}
           </div>
           <button class="check ${it.done?'on':''}" data-d="${i}" data-j="${j}" aria-label="Marker som gjort">${it.done?'✓':''}</button>
+          <button class="dup" data-d="${i}" data-j="${j}" aria-label="Kopier til andre dager">⧉</button>
           <button class="del" data-d="${i}" data-j="${j}" aria-label="Slett">×</button>
-        </li>`).join('') + '</ul>' : '<p class="empty">Ingenting planlagt.</p>'}
+        </li>${copying && copying.d===i && copying.j===j ? copyRow(i) : ''}`).join('') + '</ul>' : '<p class="empty">Ingenting planlagt.</p>'}
       <div class="add">
         <div class="cats">${Object.entries(CATS).map(([k,c])=>`
           <button data-d="${i}" data-cat="${k}" aria-pressed="${k===cat}" style="${k===cat?'background:'+c.color:''}">${c.label}</button>`).join('')}
@@ -203,12 +213,22 @@ function render(){
     wrap.appendChild(sec);
   });
 }
+function copyRow(i){
+  const others = DAYS.map((_,k)=>k).filter(k=>k!==i);
+  const allOn = others.every(k=>copying.targets.includes(k));
+  return `<li class="copyrow"><small>Kopier til:</small>
+    ${others.map(k=>`<button class="dchip" data-copyday="${k}" aria-pressed="${copying.targets.includes(k)}">${SHORT[k]}</button>`).join('')}
+    <button class="dchip" data-copyall="1" aria-pressed="${allOn}">Alle</button>
+    <button class="docopy">Kopier</button>
+    <button class="cancelcopy">Avbryt</button></li>`;
+}
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 async function addItem(i){
   const w = document.getElementById('what'+i), t = document.getElementById('time'+i);
   const text = w.value.trim();
   if(!text){ w.focus(); return; }
+  copying = null;
   plan.days[i].push({cat:chosen[i]||'trening', time:t.value.trim(), text, done:false});
   sortItems(plan.days[i]);
   render(); await save();
@@ -219,14 +239,36 @@ document.addEventListener('click', async e=>{
   if(b.dataset.cat){ chosen[b.dataset.d] = b.dataset.cat; render(); document.getElementById('what'+b.dataset.d).focus(); return; }
   if(b.dataset.add !== undefined){ addItem(+b.dataset.add); return; }
   if(b.classList.contains('check')){ const it = plan.days[b.dataset.d][b.dataset.j]; it.done = !it.done; render(); await save(); return; }
-  if(b.classList.contains('del')){ plan.days[b.dataset.d].splice(b.dataset.j,1); render(); await save(); return; }
+  if(b.classList.contains('del')){ copying = null; plan.days[b.dataset.d].splice(b.dataset.j,1); render(); await save(); return; }
+  if(b.classList.contains('dup')){
+    const d=+b.dataset.d, j=+b.dataset.j;
+    copying = (copying && copying.d===d && copying.j===j) ? null : {d, j, targets:[]};
+    render(); return;
+  }
+  if(b.dataset.copyday !== undefined){
+    const k=+b.dataset.copyday, t=copying.targets;
+    copying.targets = t.includes(k) ? t.filter(x=>x!==k) : [...t,k];
+    render(); return;
+  }
+  if(b.dataset.copyall){
+    const others = DAYS.map((_,k)=>k).filter(k=>k!==copying.d);
+    copying.targets = others.every(k=>copying.targets.includes(k)) ? [] : others;
+    render(); return;
+  }
+  if(b.classList.contains('cancelcopy')){ copying = null; render(); return; }
+  if(b.classList.contains('docopy')){
+    if(!copying.targets.length) return;
+    const src = plan.days[copying.d][copying.j];
+    copying.targets.forEach(k=>{ plan.days[k].push({...src, done:false}); sortItems(plan.days[k]); });
+    copying = null; render(); await save(); return;
+  }
 });
 document.addEventListener('keydown', e=>{
   if(e.key==='Enter' && e.target.matches('.add input')){
     const id = e.target.id.replace(/\D/g,''); addItem(+id);
   }
 });
-async function go(d){ monday = d; chosen = {}; plan = await load(monday); render(); }
+async function go(d){ monday = d; chosen = {}; copying = null; plan = await load(monday); render(); }
 document.getElementById('prev').onclick = ()=>go(addDays(monday,-7));
 document.getElementById('next').onclick = ()=>go(addDays(monday,7));
 document.getElementById('toThis').onclick = ()=>go(startOfWeek(new Date()));
