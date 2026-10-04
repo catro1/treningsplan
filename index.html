@@ -20,7 +20,7 @@
   :root[data-theme="dark"] .cats button[data-cat="annet"][aria-pressed="true"]{color:var(--ink)}
   :root[data-theme="dark"] .pill span{opacity:.7}
   body{transition:background-color .25s,color .25s}
-  .theme{border:1.5px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:5px 12px;font-size:.85rem}
+  .tools .theme{border:1.5px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:5px 12px;font-size:.85rem;text-decoration:none}
   @media (prefers-reduced-motion:reduce){body{transition:none}}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounded","Nunito","Avenir Next",system-ui,sans-serif;line-height:1.45;padding:20px 16px 48px}
@@ -74,6 +74,14 @@
   .cancelcopy{border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
   .cats button[data-cat="annet"][aria-pressed="true"]{color:var(--ink)}
   .check.on{color:var(--ink)}
+  .right{display:flex;gap:14px}
+  .sheet{position:fixed;inset:0;background:rgba(36,25,23,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;z-index:10}
+  .sheet[hidden]{display:none}
+  .sheet-box{background:var(--paper);border-radius:24px;padding:18px;width:100%;max-width:560px;display:flex;flex-direction:column;gap:10px}
+  .sheet-box h2{font-size:1.15rem}
+  .sheet-box p{font-size:.88rem;color:var(--muted)}
+  .sheet-box textarea{width:100%;height:240px;border:1.5px solid var(--line);border-radius:14px;background:var(--input);color:var(--ink);padding:10px;font:inherit;font-size:.9rem;resize:none}
+  .sheet-box .go{border:none;background:var(--ink);color:var(--paper);border-radius:999px;padding:10px;font-size:.95rem}
   .empty{color:var(--muted);font-size:.9rem;padding:4px 0}
 
   .add{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -101,7 +109,8 @@
   <button class="today-btn" id="toThis" hidden>Gå til denne uka</button>
 
   <div class="summary" id="summary"></div>
-  <div class="tools"><button class="theme" id="theme"></button><button id="copy">Kopier forrige uke</button></div>
+  <div class="tools"><button class="theme" id="theme"></button><span class="right"><button id="share">Del uka</button><button id="copy">Kopier forrige uke</button></span></div>
+  <div class="sheet" id="sheet" hidden><div class="sheet-box"><h2>Del uka</h2><p>Teksten er markert. Kopier den og lim inn i en melding.</p><textarea id="shareText" readonly></textarea><button class="go" id="closeSheet">Lukk</button></div></div>
 
   <div id="days"></div>
   <p class="note" id="status"></p>
@@ -293,6 +302,32 @@ document.getElementById('copy').onclick = async ()=>{
   plan = {days: prev.days.map(d=>d.map(i=>({...i, done:false})))};
   render(); await save();
 };
+
+// Del uka
+function weekText(){
+  const lines = ['Uke ' + isoWeek(monday) + ' (' + fmt(monday) + ' – ' + fmt(addDays(monday,6)) + ')'];
+  plan.days.forEach((items,i)=>{
+    if(!items.length) return;
+    lines.push('', DAYS[i] + ' ' + fmt(addDays(monday,i)));
+    items.forEach(it=>lines.push('• ' + (it.time ? it.time + ' ' : '') + it.text + ' (' + CATS[it.cat].label.toLowerCase() + ')'));
+  });
+  if(lines.length===1) lines.push('', 'Ingenting planlagt denne uka.');
+  return lines.join('\n');
+}
+document.getElementById('share').onclick = async ()=>{
+  const text = weekText();
+  if(navigator.share){
+    try{ await navigator.share({title:'Uke ' + isoWeek(monday), text}); return; }
+    catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  const ta = document.getElementById('shareText');
+  ta.value = text;
+  document.getElementById('sheet').hidden = false;
+  ta.focus(); ta.select();
+  try{ await navigator.clipboard.writeText(text); document.querySelector('.sheet-box p').textContent = 'Kopiert! Lim den inn i en melding.'; }catch(e){}
+};
+document.getElementById('closeSheet').onclick = ()=>{ document.getElementById('sheet').hidden = true; document.querySelector('.sheet-box p').textContent = 'Teksten er markert. Kopier den og lim inn i en melding.'; };
+document.getElementById('sheet').onclick = e=>{ if(e.target.id==='sheet') document.getElementById('closeSheet').click(); };
 
 // Lys/mørk modus
 const THEME_KEY = 'ukeplan-tema';
