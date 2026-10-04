@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ukeplan</title>
+<style>
+  :root{
+    --bg:#E8F1EE; --paper:#F7FBFA; --ink:#1F3B36; --muted:#5E7A73; --line:#CFDDD8;
+    --jobb:#3D6FA8; --skole:#B8901A; --trening:#2E8A63; --annet:#8A6FA8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;line-height:1.45;padding:20px 16px 48px}
+  main{max-width:560px;margin:0 auto}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+  .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .nav{width:40px;height:40px;border-radius:12px;border:1.5px solid var(--line);background:transparent;font-size:1.2rem}
+  .title{text-align:center}
+  h1{font-size:1.6rem;letter-spacing:-.01em}
+  .range{color:var(--muted);font-size:.92rem}
+  .today-btn{display:block;margin:6px auto 0;border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
+
+  .summary{display:flex;gap:6px;margin:18px 0 6px;flex-wrap:wrap}
+  .pill{flex:1;min-width:110px;background:var(--paper);border-radius:12px;padding:10px 12px}
+  .pill b{display:block;font-size:1.4rem;line-height:1.1}
+  .pill span{font-size:.85rem;color:var(--muted)}
+  .tools{display:flex;justify-content:flex-end;margin-bottom:12px}
+  .tools button{border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
+
+  .day{background:var(--paper);border-radius:18px;padding:16px;margin-bottom:12px;border:2px solid transparent}
+  .day.is-today{border-color:var(--ink)}
+  .day-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .day-head h2{font-size:1.15rem}
+  .day-head small{color:var(--muted)}
+  ul{list-style:none}
+  li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  li:first-child{border-top:none}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .item{flex:1;min-width:0}
+  .item .t{font-size:.82rem;color:var(--muted)}
+  .item.done .txt{text-decoration:line-through;color:var(--muted)}
+  .check,.del{border:none;background:none;width:32px;height:32px;border-radius:8px;flex:none}
+  .check{border:1.5px solid var(--line);font-size:.9rem}
+  .check.on{background:var(--trening);border-color:var(--trening);color:#fff}
+  .del{color:var(--muted);font-size:1.1rem}
+  .empty{color:var(--muted);font-size:.9rem;padding:4px 0}
+
+  .add{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .cats{display:flex;gap:4px;width:100%}
+  .cats button{flex:1;border:1.5px solid var(--line);background:transparent;border-radius:9px;padding:6px 2px;font-size:.82rem}
+  .cats button[aria-pressed="true"]{color:#fff;border-color:transparent}
+  .add input{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font-size:.95rem}
+  .add .time{width:96px}
+  .add .what{flex:1;min-width:120px}
+  .add .go{border:none;background:var(--ink);color:var(--paper);border-radius:10px;padding:8px 14px}
+
+  .note{font-size:.82rem;color:var(--muted);text-align:center;margin-top:16px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <button class="nav" id="prev" aria-label="Forrige uke">‹</button>
+    <div class="title">
+      <h1 id="week"></h1>
+      <div class="range" id="range"></div>
+    </div>
+    <button class="nav" id="next" aria-label="Neste uke">›</button>
+  </div>
+  <button class="today-btn" id="toThis" hidden>Gå til denne uka</button>
+
+  <div class="summary" id="summary"></div>
+  <div class="tools"><button id="copy">Kopier forrige uke</button></div>
+
+  <div id="days"></div>
+  <p class="note" id="status"></p>
+</main>
+
+<script>
+const CATS = {
+  jobb:{label:'Jobb',color:'var(--jobb)'},
+  skole:{label:'Skole',color:'var(--skole)'},
+  trening:{label:'Trening',color:'var(--trening)'},
+  annet:{label:'Annet',color:'var(--annet)'}
+};
+const DAYS = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
+const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+
+let monday = startOfWeek(new Date());
+let plan = emptyPlan();
+let chosen = {}; // valgt kategori per dag
+let memory = {}; // fallback hvis lagring ikke finnes
+
+function startOfWeek(d){
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const wd = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - wd);
+  return x;
+}
+function addDays(d,n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function isoWeek(d){
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return Math.ceil(((t - y0) / 864e5 + 1) / 7);
+}
+function key(d){ return 'ukeplan:' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function emptyPlan(){ return {days:[[],[],[],[],[]]}; }
+function fmt(d){ return d.getDate() + '. ' + MONTHS[d.getMonth()]; }
+
+// Lagring: Claude-appen, ellers nettleserens lokale lagring, ellers bare i minnet
+let local = null;
+try{ const t='__test'; window.localStorage.setItem(t,t); window.localStorage.removeItem(t); local = window.localStorage; }catch(e){}
+
+async function load(d){
+  const k = key(d);
+  try{
+    if(window.storage){
+      const r = await window.storage.get(k, false);
+      if(r && r.value) return JSON.parse(r.value);
+    } else if(local){
+      const v = local.getItem(k);
+      if(v) return JSON.parse(v);
+    } else if(memory[k]) return JSON.parse(memory[k]);
+  }catch(e){}
+  return emptyPlan();
+}
+async function save(){
+  const k = key(monday), v = JSON.stringify(plan);
+  try{
+    if(window.storage){
+      const r = await window.storage.set(k, v, false);
+      setStatus(r ? '' : 'Kunne ikke lagre.');
+    } else if(local){
+      local.setItem(k, v); setStatus('');
+    } else { memory[k] = v; setStatus('Endringer lagres bare så lenge siden er åpen.'); }
+  }catch(e){ setStatus('Kunne ikke lagre.'); }
+}
+function setStatus(t){ document.getElementById('status').textContent = t; }
+
+function sortItems(arr){
+  arr.sort((a,b)=> (a.time||'99').localeCompare(b.time||'99'));
+}
+
+function render(){
+  const fri = addDays(monday,4);
+  document.getElementById('week').textContent = 'Uke ' + isoWeek(monday);
+  document.getElementById('range').textContent = fmt(monday) + ' – ' + fmt(fri);
+  const thisMon = startOfWeek(new Date());
+  document.getElementById('toThis').hidden = monday.getTime() === thisMon.getTime();
+
+  const all = plan.days.flat();
+  const tr = all.filter(i=>i.cat==='trening');
+  const trDone = tr.filter(i=>i.done).length;
+  const jobbDays = plan.days.filter(d=>d.some(i=>i.cat==='jobb')).length;
+  const skole = all.filter(i=>i.cat==='skole').length;
+  document.getElementById('summary').innerHTML =
+    `<div class="pill"><b>${trDone}/${tr.length}</b><span>økter gjennomført</span></div>
+     <div class="pill"><b>${jobbDays}</b><span>jobbdager</span></div>
+     <div class="pill"><b>${skole}</b><span>skoleting</span></div>`;
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const wrap = document.getElementById('days');
+  wrap.innerHTML = '';
+  DAYS.forEach((name,i)=>{
+    const date = addDays(monday,i);
+    const cat = chosen[i] || 'trening';
+    const sec = document.createElement('section');
+    sec.className = 'day' + (date.getTime()===today.getTime() ? ' is-today' : '');
+    const items = plan.days[i];
+    sec.innerHTML = `
+      <div class="day-head"><h2>${name}</h2><small>${fmt(date)}</small></div>
+      ${items.length ? '<ul>' + items.map((it,j)=>`
+        <li>
+          <span class="dot" style="background:${CATS[it.cat].color}"></span>
+          <div class="item ${it.done?'done':''}">
+            <div class="txt">${esc(it.text)}</div>
+            ${it.time ? `<div class="t">${esc(it.time)}</div>` : ''}
+          </div>
+          <button class="check ${it.done?'on':''}" data-d="${i}" data-j="${j}" aria-label="Marker som gjort">${it.done?'✓':''}</button>
+          <button class="del" data-d="${i}" data-j="${j}" aria-label="Slett">×</button>
+        </li>`).join('') + '</ul>' : '<p class="empty">Ingenting planlagt.</p>'}
+      <div class="add">
+        <div class="cats">${Object.entries(CATS).map(([k,c])=>`
+          <button data-d="${i}" data-cat="${k}" aria-pressed="${k===cat}" style="${k===cat?'background:'+c.color:''}">${c.label}</button>`).join('')}
+        </div>
+        <input class="time" id="time${i}" placeholder="07:15">
+        <input class="what" id="what${i}" placeholder="Hva skal du gjøre?">
+        <button class="go" data-add="${i}">Legg til</button>
+      </div>`;
+    wrap.appendChild(sec);
+  });
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function addItem(i){
+  const w = document.getElementById('what'+i), t = document.getElementById('time'+i);
+  const text = w.value.trim();
+  if(!text){ w.focus(); return; }
+  plan.days[i].push({cat:chosen[i]||'trening', time:t.value.trim(), text, done:false});
+  sortItems(plan.days[i]);
+  render(); await save();
+}
+
+document.addEventListener('click', async e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.dataset.cat){ chosen[b.dataset.d] = b.dataset.cat; render(); document.getElementById('what'+b.dataset.d).focus(); return; }
+  if(b.dataset.add !== undefined){ addItem(+b.dataset.add); return; }
+  if(b.classList.contains('check')){ const it = plan.days[b.dataset.d][b.dataset.j]; it.done = !it.done; render(); await save(); return; }
+  if(b.classList.contains('del')){ plan.days[b.dataset.d].splice(b.dataset.j,1); render(); await save(); return; }
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && e.target.matches('.add input')){
+    const id = e.target.id.replace(/\D/g,''); addItem(+id);
+  }
+});
+async function go(d){ monday = d; chosen = {}; plan = await load(monday); render(); }
+document.getElementById('prev').onclick = ()=>go(addDays(monday,-7));
+document.getElementById('next').onclick = ()=>go(addDays(monday,7));
+document.getElementById('toThis').onclick = ()=>go(startOfWeek(new Date()));
+document.getElementById('copy').onclick = async ()=>{
+  const prev = await load(addDays(monday,-7));
+  if(!prev.days.flat().length){ setStatus('Forrige uke er tom, ingenting å kopiere.'); return; }
+  if(plan.days.flat().length && !confirm('Dette erstatter planen for denne uka. Fortsette?')) return;
+  plan = {days: prev.days.map(d=>d.map(i=>({...i, done:false})))};
+  render(); await save();
+};
+
+// Søndag: vis neste uke, siden det er da du planlegger
+if(new Date().getDay()===0) monday = addDays(monday,7);
+go(monday);
+</script>
+</body>
+</html>
