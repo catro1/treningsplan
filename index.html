@@ -101,6 +101,17 @@
   .shop .add{margin:0 0 6px}
   .shop-tools{display:flex;justify-content:space-between;margin-top:10px}
   .shop-tools button{border:none;background:none;color:var(--muted);font-size:.85rem;text-decoration:underline}
+  .rem{background:var(--babypink);border:1.5px dashed var(--pink);border-radius:20px;padding:12px 14px;margin-bottom:12px}
+  .rem[hidden]{display:none}
+  .rem h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink);opacity:.75;margin-bottom:2px}
+  .rem li{border-top:1px dashed var(--pink);padding:6px 0}
+  .rem li:first-child{border-top:none}
+  .rem .txt::before{content:'✎ ';color:var(--pink)}
+  .rem .from{font-size:.78rem;color:var(--ink);opacity:.65}
+  .rem .check{background:var(--paper)}
+  .rem-wrap{margin-top:4px;padding:14px;border:1.5px dashed var(--line);border-radius:20px}
+  .rem-wrap h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+  .rem-wrap .add{margin-top:0}
   .empty{color:var(--muted);font-size:.9rem;padding:4px 0}
 
   .add{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -137,7 +148,18 @@
   <div class="tools"><span class="right"><button id="share">Del uka</button><button id="copy">Kopier forrige uke</button></span></div>
   <div class="sheet" id="sheet" hidden><div class="sheet-box"><h2>Del uka</h2><p>Teksten er markert. Kopier den og lim inn i en melding.</p><textarea id="shareText" readonly></textarea><button class="go" id="closeSheet">Lukk</button></div></div>
 
+  <section class="rem" id="remSec" hidden>
+    <h2>Husk denne uka</h2>
+    <ul id="remList"></ul>
+  </section>
   <div id="days"></div>
+  <section class="rem-wrap">
+    <h2>Ny påminnelse</h2>
+    <div class="add">
+      <input class="what" id="remInput" placeholder="Noe du må huske denne uka?">
+      <button class="go" id="remAdd">Legg til</button>
+    </div>
+  </section>
   </div>
   <div id="shopView" hidden>
     <section class="day shop">
@@ -170,6 +192,7 @@ let chosen = {}; // valgt kategori per dag
 let copying = null; // {d, j, targets}
 let editing = null; // {d, j, cat, day}
 let shop = [];
+let rems = [];
 let memory = {}; // fallback hvis lagring ikke finnes
 
 function startOfWeek(d){
@@ -243,6 +266,7 @@ function render(){
      <div class="pill"><b>${skole}</b><span>skoleting</span></div>`;
 
   const today = new Date(); today.setHours(0,0,0,0);
+  if(typeof renderRem==='function') try{ renderRem(); }catch(e){}
   const wrap = document.getElementById('days');
   wrap.innerHTML = '';
   DAYS.forEach((name,i)=>{
@@ -361,6 +385,7 @@ async function saveEdit(){
 document.addEventListener('keydown', e=>{
   if(e.key==='Enter' && (e.target.id==='etext' || e.target.id==='etime')){ saveEdit(); return; }
   if(e.key==='Enter' && e.target.id==='shopInput'){ addShop(); return; }
+  if(e.key==='Enter' && e.target.id==='remInput'){ addRem(); return; }
   if(e.key==='Enter' && e.target.matches('.add input')){
     const id = e.target.id.replace(/\D/g,''); addItem(+id);
   }
@@ -392,6 +417,43 @@ async function setVal(k,v){
     else memory[k]=v;
   }catch(e){ setStatus('Kunne ikke lagre.'); }
 }
+
+// Påminnelser: blir med til neste uke helt til de er gjort
+const REM_KEY = 'ukeplan-paminnelser';
+function wk(d){ return key(d).slice(8); }
+function renderRem(){
+  const cur = wk(monday);
+  const vis = rems.filter(r => r.done ? r.doneWeek===cur : r.week<=cur);
+  vis.sort((a,b)=> (a.done-b.done) || a.week.localeCompare(b.week));
+  document.getElementById('remSec').hidden = !vis.length;
+  document.getElementById('remList').innerHTML = vis.length ? vis.map(r=>{
+    const j = rems.indexOf(r);
+    const from = !r.done && r.week<cur ? `<div class="from">Fra uke ${isoWeek(new Date(r.week+'T12:00'))}</div>` : '';
+    return `<li>
+      <div class="item ${r.done?'done':''}"><div class="txt">${esc(r.text)}</div>${from}</div>
+      <button class="check ${r.done?'on':''}" data-rem="${j}" aria-label="Gjort">${r.done?'♥':''}</button>
+      <button class="del" data-remdel="${j}" aria-label="Slett">×</button>
+    </li>`;}).join('') : '<li class="empty">Ingen påminnelser denne uka ✿</li>';
+}
+async function saveRem(){ await setVal(REM_KEY, JSON.stringify(rems)); }
+async function addRem(){
+  const inp = document.getElementById('remInput'), text = inp.value.trim();
+  if(!text){ inp.focus(); return; }
+  rems.push({text, week:wk(monday), done:false, doneWeek:null});
+  inp.value=''; renderRem(); await saveRem();
+  document.getElementById('remSec').scrollIntoView({behavior:'smooth',block:'center'});
+}
+document.getElementById('remAdd').onclick = addRem;
+document.getElementById('remSec').addEventListener('click', async e=>{
+  const b = e.target.closest('button'); if(!b || b.id==='remAdd') return;
+  e.stopPropagation();
+  if(b.dataset.rem!==undefined){
+    const r = rems[+b.dataset.rem];
+    r.done = !r.done; r.doneWeek = r.done ? wk(monday) : null;
+  } else if(b.dataset.remdel!==undefined){ rems.splice(+b.dataset.remdel,1); }
+  renderRem(); await saveRem();
+});
+(async()=>{ try{ rems = JSON.parse(await getVal(REM_KEY) || '[]'); }catch(e){ rems=[]; } renderRem(); })();
 
 // Handleliste
 const SHOP_KEY = 'ukeplan-handleliste';
